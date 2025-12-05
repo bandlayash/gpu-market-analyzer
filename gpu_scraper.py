@@ -70,7 +70,7 @@ cur = conn.cursor()
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS gpus (
-    name TEXT,
+    name TEXT PRIMARY KEY,
     release_date TEXT,
     memory_amount TEXT,
     memory_type TEXT,
