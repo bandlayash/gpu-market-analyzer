@@ -34,7 +34,7 @@ df_filtered = df[global_mask]
 # --- TOP METRICS ---
 col1, col2 = st.columns(2)
 col1.metric("Total GPUs in DB", total_db_count)
-col2.metric("Priced & Analyzed", len(df))
+col2.metric("Total GPUs Priced & Analyzed", len(df))
 
 
 
@@ -85,6 +85,7 @@ if compare_list:
             st.info(f"### {name}")
             st.write(f"**Price:** ${row['active_price']:.0f}")
             st.write(f"**Tier:** {row['tier']}")
+            st.write(f"**Driver Support:** {row['support']}")
             
             # FPS Metrics
             st.metric("1080p Ultra", f"{row['1080p Ultra']:.0f} FPS")
@@ -109,7 +110,7 @@ c1, c2 = st.columns([1, 2])
 with c1:
     st.markdown("#### Define Your Goal")
     target_res = st.selectbox("Target Resolution", ["1080p", "1440p", "4K"])
-    target_fps = st.slider("Target FPS (Minimum)", 30, 165, 60)
+    target_fps = st.slider("Target FPS (Minimum)", 30, 120, 60)
     
     # Map selection to column name
     res_col_map = {

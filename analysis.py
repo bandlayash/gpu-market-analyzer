@@ -14,7 +14,7 @@ def get_raw_data():
     """Simple fetch from DB using a local connection"""
     conn = sqlite3.connect(DB_PATH)
     query = """
-        SELECT name, launch_prices, amazon_new_avg, ebay_used_avg, rel_performance, tier
+        SELECT name, launch_prices, amazon_new_avg, ebay_used_avg, rel_performance, tier, driver_support
         FROM gpus
         WHERE rel_performance IS NOT NULL
     """
@@ -73,7 +73,12 @@ def get_analyzed_df():
     Returns the fully processed dataframe for the Dashboard.
     """
     df = get_raw_data()
-    
+    if 'driver_support' in df.columns:
+        df['support'] = df['driver_support'].fillna("Unknown")
+        df = df.drop(columns=['driver_support'])
+    else:
+        df['support'] = "N/A"
+
     # Price Strategy: Prefer eBay -> Amazon -> MSRP
     # Create a clean 'active_price' column
     # Ensure columns are numeric before math
@@ -95,7 +100,10 @@ def get_analyzed_df():
 
     # Calculate "Value" (Cost per Frame)
     df['Value 1080p'] = df['active_price'] / df['1080p Ultra']
+    df['Value 1440p'] = df['active_price'] / df['1440p Ultra']
     df['Value 4K'] = df['active_price'] / df['4K Ultra']
+
+    
     
     return df
 
