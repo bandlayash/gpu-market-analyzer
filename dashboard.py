@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-import analysis  # Importing your logic file
+import analysis
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="GPU Market Analyzer", layout="wide")
@@ -10,7 +10,6 @@ st.title("GPU Market Analysis Dashboard")
 # --- LOAD DATA ---
 @st.cache_data
 def load_data():
-    # Get the cleaned data from your analysis script
     df = analysis.get_analyzed_df()
     
     # Load raw DB just to get the total count (including unpriced cards)
@@ -124,7 +123,6 @@ with c2:
     st.markdown(f"#### Top 5 Best Value Cards for {target_res} @ {target_fps}+ FPS")
     
     # Logic: Filter for FPS target -> Sort by Cheapest Price
-    # (Alternatively: Sort by Price per Frame, but usually users want the cheapest card that does the job)
     
     candidates = df[df[target_col] >= target_fps].copy()
     
