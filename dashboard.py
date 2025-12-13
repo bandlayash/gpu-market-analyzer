@@ -12,7 +12,7 @@ st.title("GPU Market Analysis Dashboard")
 def load_data():
     df = analysis.get_analyzed_df()
     
-    # Load raw DB just to get the total count (including unpriced cards)
+    # Load raw DB just to get the total count
     conn = analysis.sqlite3.connect("gpus.db")
     total_count = pd.read_sql_query("SELECT count(*) from gpus", conn).iloc[0,0]
     conn.close()
@@ -21,154 +21,267 @@ def load_data():
 
 df, total_db_count = load_data()
 
-# --- SIDEBAR FILTERS ---
-st.sidebar.header("Global Filters")
-valid_tiers = [t for t in df['tier'].unique() if t]
-selected_tiers = st.sidebar.multiselect("Performance Tier", options=valid_tiers, default=valid_tiers)
+# --- CONFIGURATION ---
+TIER_ORDER = ["Low", "Low-Mid", "High-Mid", "High", "Ultra-High", "Ultra"] 
 
-# Filter Dataframe based on sidebar
-global_mask = df['tier'].isin(selected_tiers)
-df_filtered = df[global_mask]
-
-# --- TOP METRICS ---
-col1, col2 = st.columns(2)
-col1.metric("Total GPUs in DB", total_db_count)
-col2.metric("Total GPUs Priced & Analyzed", len(df))
-
-
-
-st.markdown("---")
-
-# =========================================================
-# ABOUT THE DASHBOARD
-# =========================================================
-st.subheader("About This Dashboard")
-
-st.markdown("##### How were the GPU tiers created?")
-st.text("I used a simple K-Means clustering algorithm that sorts the GPUs into 5 tiers (Low, Low-Mid, High-Mid, High, Ultra-High) based on the relative performance. " \
-"I went with 5 tiers to ensure there was the sorting was fairly spread out and not clumping too many in the same tier.")
-
-st.markdown("##### How was the FPS calculated?")
-st.text("I found the most used GPU according to the 11/25 Steam Hardware Survey (The RTX 4060 Mobile) and used the relative performance scale on the TechPowerUp website to estimate the performance of other GPUs. " \
-"I found some benchmarks on YouTube for some Triple A titles and averaged them for each resolution. No eSports titles (CS2, Valorant, R6 Siege) were taken into consideration as they were extreme outliers in the data. ", width = "content")
-
-st.markdown("##### What is active_price and how is it calculated?")
-st.text("The 'active price' is calculated by simply preferring the average eBay price first and if that is not found then the average Amazon price and finally the MSRP. " \
-"I chose eBay as the first preference since this is where cards are the most available for the best price. The eBay price is found by averaging the 10 most recent sales for Buy It Now price and Used condition." \
-" This way, all broken parts and non GPU items are discarded and true market value can be found. This is the main price that is used for all price calculations in this dashboard.")
-
-
-st.markdown("---")
-# =========================================================
-# SECTION 1: HEAD-TO-HEAD COMPARATOR
-# =========================================================
-st.subheader("Head-to-Head Comparison")
-
-# Multi-select for comparing specific cards
-compare_list = st.multiselect(
-    "Select GPUs to Compare (Up to 5)", 
-    options=df['name'].sort_values(),
-    default=df.sort_values("rel_performance", ascending=False).head(3)['name'].tolist(), # Default to top 3
-    max_selections=5
-)
-
-if compare_list:
-    # Filter data for selected cards
-    comp_df = df[df['name'].isin(compare_list)].set_index('name')
+# --- TOP METRICS & ABOUT ---
+with st.expander("About & Metrics", expanded=False):
+    col1, col2 = st.columns(2)
+    col1.metric("Total GPUs in DB", total_db_count)
+    col2.metric("Analyzed GPUs", len(df))
     
-    # Create columns dynamically based on selection
-    cols = st.columns(len(compare_list))
+    st.markdown("---")
+    st.markdown("##### Methodology")
+    st.caption("**Tiers:** K-Means clustering (5 tiers) based on relative performance.")
+    st.caption("**FPS:** Estimated FPS using TechPowerUp relative scale against RTX 4060 Mobile (Most used GPU on Steam) benchmarks.")
+    st.caption("**Active Price:** Prioritizes eBay average (recent sold), then Amazon, then MSRP.")
+
+# --- MAIN TABS ---
+tab_compare, tab_value, tab_scatter = st.tabs([
+    "Head-to-Head", 
+    "Best Value", 
+    "Price vs Performance"
+])
+
+# =========================================================
+# TAB 1: HEAD-TO-HEAD COMPARATOR
+# =========================================================
+with tab_compare:
+    st.subheader("Head-to-Head Comparison")
     
-    for i, (name, row) in enumerate(comp_df.iterrows()):
-        with cols[i]:
-            st.info(f"### {name}")
-            st.write(f"**Price:** ${row['active_price']:.0f}")
-            st.write(f"**Tier:** {row['tier']}")
-            st.write(f"**Driver Support:** {row['support']}")
+    # Toggle View
+    is_mobile_view = st.toggle("Mobile / Compact View", value=True)
+    
+    sorted_names = df.sort_values("rel_performance", ascending=False)['name'].unique()
+    
+    compare_list = st.multiselect(
+        "Select GPUs (1st is Baseline)", 
+        options=sorted_names,
+        default=sorted_names[:2] if len(sorted_names) >= 2 else sorted_names,
+        max_selections=5
+    )
+
+    if compare_list:
+        comp_df = df[df['name'].isin(compare_list)].set_index('name')
+        comp_df = comp_df.reindex(compare_list)
+        
+        baseline_name = compare_list[0]
+        baseline_row = comp_df.loc[baseline_name]
+
+        # --- MOBILE / COMPACT CARD VIEW ---
+        if is_mobile_view:
+            st.caption(f"Baseline: **{baseline_name}**")
             
-            # FPS Metrics
-            st.metric("1080p Ultra", f"{row['1080p Ultra']:.0f} FPS")
-            st.metric("1440p Ultra", f"{row['1440p Ultra']:.0f} FPS")
-            st.metric("4K Ultra", f"{row['4K Ultra']:.0f} FPS")
-            
-            # Value Metric
-            st.write(f"**Cost per Frame:** ${row['Value 1080p']:.2f}")
+            for gpu_name in compare_list:
+                row = comp_df.loc[gpu_name]
+                
+                # Render Ultra-Compact Card
+                with st.container(border=True):
+                    
+                    # --- ROW 1: Header (Name vs Price) ---
+                    # Use columns to align Price to the right
+                    c_name, c_price = st.columns([0.65, 0.35])
+                    
+                    with c_name:
+                        st.markdown(f"**{gpu_name}**")
+                        st.caption(f"{row['tier']}")
+                        
+                    with c_price:
+                        # Price Calculation & HTML Formatting for Right Alignment
+                        price_val = row['active_price']
+                        price_str = f"${price_val:.0f}"
+                        
+                        if gpu_name != baseline_name and baseline_row['active_price'] > 0:
+                            diff = ((price_val - baseline_row['active_price']) / baseline_row['active_price']) * 100
+                            # Price: Higher is Red (Bad), Lower is Green (Good)
+                            color = "red" if diff > 0 else "green"
+                            sign = "+" if diff > 0 else ""
+                            # Using HTML for tight stacking and right alignment
+                            st.markdown(
+                                f"""<div style='text-align: right; line-height: 1.2;'>
+                                <b>{price_str}</b><br>
+                                <span style='color:{color}; font-size: 0.85em; font-weight: bold;'>{sign}{diff:.1f}%</span>
+                                </div>""", 
+                                unsafe_allow_html=True
+                            )
+                        else:
+                            st.markdown(f"<div style='text-align: right'><b>{price_str}</b></div>", unsafe_allow_html=True)
 
-else:
-    st.info("Select GPUs above to see a comparison.")
+                    # --- ROW 2: Compact FPS Stats ---
+                    # Helper to create colored Markdown segments
+                    def get_fps_md(col_name, label):
+                        val = row[col_name]
+                        if gpu_name == baseline_name or baseline_row[col_name] == 0:
+                            return f"**{label}:** {val:.0f}"
+                        
+                        base = baseline_row[col_name]
+                        diff = ((val - base) / base) * 100
+                        # FPS: Higher is Green (Good), Lower is Red (Bad)
+                        color = "green" if diff > 0 else "red"
+                        sign = "+" if diff > 0 else ""
+                        # Streamlit Markdown Color Syntax: :color[text]
+                        return f"**{label}:** {val:.0f} (:{color}[{sign}{diff:.0f}%])"
 
-st.markdown("---")
+                    fps_1080 = get_fps_md("1080p Ultra", "1080p")
+                    fps_1440 = get_fps_md("1440p Ultra", "1440p")
+                    fps_4k = get_fps_md("4K Ultra", "4K")
+                    
+                    # Display all FPS in one line
+                    st.markdown(f"{fps_1080} &nbsp;|&nbsp; {fps_1440} &nbsp;|&nbsp; {fps_4k}")
 
-# =========================================================
-# SECTION 2: TARGET RESOLUTION & VALUE FINDER
-# =========================================================
-st.subheader("Find the Best Value for Your Target")
+        # --- DESKTOP VIEW ---
+        else:
+            cols = st.columns(len(compare_list))
+            for i, gpu_name in enumerate(compare_list):
+                row = comp_df.loc[gpu_name]
+                with cols[i]:
+                    with st.container(border=True):
+                        st.markdown(f"#### {gpu_name}")
+                        st.write(f"**Tier:** {row['tier']}")
+                        
+                        # Price Metric
+                        p_delta = None
+                        if i > 0 and baseline_row['active_price'] > 0:
+                            diff = ((row['active_price'] - baseline_row['active_price'])/baseline_row['active_price'])*100
+                            p_delta = f"{diff:.1f}%"
+                        
+                        st.metric("Price", f"${row['active_price']:.0f}", delta=p_delta, delta_color="inverse")
+                        
+                        st.divider()
+                        
+                        # FPS Metrics
+                        def calc_delta(curr, base):
+                            if base == 0: return None
+                            return f"{((curr-base)/base)*100:.1f}%"
 
-c1, c2 = st.columns([1, 2])
+                        st.metric("1080p Ultra", f"{row['1080p Ultra']:.0f}", delta=None if i==0 else calc_delta(row['1080p Ultra'], baseline_row['1080p Ultra']))
+                        st.metric("4K Ultra", f"{row['4K Ultra']:.0f}", delta=None if i==0 else calc_delta(row['4K Ultra'], baseline_row['4K Ultra']))
 
-with c1:
-    st.markdown("#### Define Your Goal")
-    target_res = st.selectbox("Target Resolution", ["1080p", "1440p", "4K"])
-    target_fps = st.slider("Target FPS (Minimum)", 30, 120, 60)
-    
-    # Map selection to column name
-    res_col_map = {
-        "1080p": "1080p Ultra",
-        "1440p": "1440p Ultra",
-        "4K": "4K Ultra"
-    }
-    target_col = res_col_map[target_res]
-
-with c2:
-    st.markdown(f"#### Top 5 Best Value Cards for {target_res} @ {target_fps}+ FPS")
-    
-    # Logic: Filter for FPS target -> Sort by Cheapest Price
-    
-    candidates = df[df[target_col] >= target_fps].copy()
-    
-    if not candidates.empty:
-        # Calculate specific value for this resolution
-        candidates['Cost Per Frame'] = candidates['active_price'] / candidates[target_col]
-        
-        # Sort by best value (Cost Per Frame)
-        top_picks = candidates.sort_values("Cost Per Frame", ascending=True).head(5)
-        
-        # Formatting for display
-        display_cols = ['name', 'active_price', target_col, 'Cost Per Frame', 'tier']
-        
-        st.dataframe(
-            top_picks[display_cols].style.format({
-                "active_price": "${:.0f}",
-                target_col: "{:.0f} FPS",
-                "Cost Per Frame": "${:.2f}"
-            }),
-            use_container_width=True
-        )
     else:
-        st.error(f"No GPUs found that can hit {target_fps} FPS at {target_res}. Try lowering your target.")
-
-st.markdown("---")
+        st.info("Select GPUs above to compare.")
 
 # =========================================================
-# SECTION 3: MARKET SCATTER PLOT
+# TAB 2: TARGET RESOLUTION & VALUE FINDER
 # =========================================================
-st.subheader("The Big Picture: Price vs. Performance")
+with tab_value:
+    st.subheader("Find the Best Value for Your Target")
 
-fig = px.scatter(
-    df_filtered,
-    x="active_price",
-    y="rel_performance",
-    color="tier",
-    size="rel_performance",
-    hover_name="name",
-    hover_data=["1080p Ultra", "4K Ultra", "active_price"],
-    title="Market Efficiency Frontier",
-    labels={"active_price": "Price ($)", "rel_performance": "Relative Performance (%)"},
-    height=600,
-    template="plotly_dark"
-)
-st.plotly_chart(fig, use_container_width=True)
+    c1, c2 = st.columns([1, 2])
 
-# Raw Data Expander
-with st.expander("View Full Raw Data"):
-    st.dataframe(df)
+    with c1:
+        st.markdown("#### Define Your Goal")
+        target_res = st.selectbox("Target Resolution", ["1080p", "1440p", "4K"])
+        
+        target_fps = st.number_input(
+            "Target FPS (Minimum)", 
+            min_value=10, 
+            max_value=500, 
+            value=60, 
+            step=5
+        )
+        
+        res_col_map = {
+            "1080p": "1080p Ultra",
+            "1440p": "1440p Ultra",
+            "4K": "4K Ultra"
+        }
+        target_col = res_col_map[target_res]
+
+    with c2:
+        st.markdown(f"#### Top 5 Best Value Cards for {target_res} @ {target_fps}+ FPS")
+        
+        candidates = df[df[target_col] >= target_fps].copy()
+        
+        if not candidates.empty:
+            candidates['Cost Per Frame'] = candidates['active_price'] / candidates[target_col]
+            top_picks = candidates.sort_values("Cost Per Frame", ascending=True).head(5)
+            
+            display_cols = ['name', 'active_price', target_col, 'Cost Per Frame', 'tier']
+            
+            st.dataframe(
+                top_picks[display_cols].style.format({
+                    "active_price": "${:.0f}",
+                    target_col: "{:.0f} FPS",
+                    "Cost Per Frame": "${:.2f}"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.error(f"No GPUs found that can hit {target_fps} FPS at {target_res}. Try lowering your target.")
+
+# =========================================================
+# TAB 3: MARKET SCATTER PLOT
+# =========================================================
+with tab_scatter:
+    st.subheader("The Big Picture: Price vs. Performance")
+    
+    col_filter, col_search = st.columns(2)
+    
+    with col_filter:
+        valid_tiers = [t for t in df['tier'].unique() if t]
+        selected_tiers = st.multiselect(
+            "Filter by Tier", 
+            options=valid_tiers, 
+            default=valid_tiers
+        )
+
+    with col_search:
+        search_options = sorted(df['name'].unique().tolist())
+        highlight_gpus = st.multiselect("🔍 Highlight Specific GPUs", options=search_options)
+
+    # Apply Filter
+    df_filtered = df[df['tier'].isin(selected_tiers)].copy()
+
+    # --- PLOTTING ---
+    if highlight_gpus:
+        df_filtered['color_group'] = df_filtered['name'].apply(
+            lambda x: "Selected" if x in highlight_gpus else "Others"
+        )
+        df_filtered = df_filtered.sort_values('color_group', ascending=True) 
+        
+        color_map = {"Selected": "#FF4B4B", "Others": "grey"}
+        
+        fig = px.scatter(
+            df_filtered,
+            x="active_price",
+            y="rel_performance",
+            color="color_group",
+            color_discrete_map=color_map,
+            size="rel_performance",
+            hover_name="name",
+            hover_data=["1080p Ultra", "4K Ultra", "active_price"],
+            height=600,
+            template="plotly_dark",
+            opacity=0.8
+        )
+        fig.for_each_trace(
+            lambda trace: trace.update(opacity=0.3) if trace.name == "Others" else trace.update(opacity=1.0, marker=dict(size=15, line=dict(width=2, color='white')))
+        )
+        fig.update_layout(showlegend=False)
+
+    else:
+        fig = px.scatter(
+            df_filtered,
+            x="active_price",
+            y="rel_performance",
+            color="tier",
+            size="rel_performance",
+            hover_name="name",
+            hover_data=["1080p Ultra", "4K Ultra", "active_price"],
+            height=600,
+            template="plotly_dark",
+            category_orders={"tier": TIER_ORDER}
+        )
+
+    fig.update_layout(
+        title="Market Efficiency Frontier",
+        xaxis_title="Price ($)",
+        yaxis_title="Relative Performance (%)",
+        legend_title_text="Performance Tier"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    with st.expander("View Filtered Raw Data"):
+        st.dataframe(df_filtered)
