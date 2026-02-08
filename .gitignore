@@ -1,2 +1,10 @@
 .venv
 .env
+add_workstation_cards.py
+amazon_scraper.py
+ebay_price_updater.py
+ebay_scraper.py
+fill_missing_performance.py
+launch_price_scraper.py
+performance_scraper_calc.py
+set_anchor.py

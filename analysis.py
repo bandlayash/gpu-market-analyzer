@@ -4,9 +4,9 @@ import numpy as np
 from sklearn.cluster import KMeans
 
 # --- CONFIGURATION ---
-ANCHOR_FPS_1080P = 69
-ANCHOR_FPS_1440P = 54
-ANCHOR_FPS_4K = 34
+ANCHOR_FPS_1080P = 64
+ANCHOR_FPS_1440P = 51
+ANCHOR_FPS_4K = 44.2
 
 DB_PATH = "gpus.db"
 
@@ -83,10 +83,10 @@ def get_analyzed_df():
     # Create a clean 'active_price' column
     # Ensure columns are numeric before math
     df['ebay_used_avg'] = pd.to_numeric(df['ebay_used_avg'], errors='coerce')
-    df['amazon_new_avg'] = pd.to_numeric(df['amazon_new_avg'], errors='coerce')
+    df['new_avg'] = pd.to_numeric(df['new_avg'], errors='coerce')
     df['launch_prices'] = pd.to_numeric(df['launch_prices'], errors='coerce')
 
-    df['active_price'] = df['ebay_used_avg'].fillna(df['amazon_new_avg']).fillna(df['launch_prices'])
+    df['active_price'] = df['ebay_used_avg'].fillna(df['new_avg']).fillna(df['launch_prices'])
     
     # Remove invalid rows (Free or Broken data)
     df = df[df['active_price'] > 50] 
