@@ -205,7 +205,7 @@ with tab_value:
                     target_col: "{:.0f} FPS",
                     "Cost Per Frame": "${:.2f}"
                 }),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
         else:
@@ -282,7 +282,7 @@ with tab_scatter:
         legend_title_text="Performance Tier"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     with st.expander("View Filtered Raw Data"):
         st.dataframe(df_filtered)
