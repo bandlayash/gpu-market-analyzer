@@ -2,6 +2,7 @@ import sqlite3
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
+import sys
 
 # --- CONFIGURATION ---
 ANCHOR_FPS_1080P = 64
@@ -14,7 +15,7 @@ def get_raw_data():
     """Simple fetch from DB using a local connection"""
     conn = sqlite3.connect(DB_PATH)
     query = """
-        SELECT name, launch_prices, amazon_new_avg, ebay_used_avg, rel_performance, tier, driver_support
+        SELECT name, launch_prices, new_avg, ebay_used_avg, rel_performance, tier, driver_support
         FROM gpus
         WHERE rel_performance IS NOT NULL
     """

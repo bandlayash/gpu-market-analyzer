@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 import analysis
+import sys
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="GPU Market Analyzer", layout="wide")
